@@ -7,6 +7,9 @@ import type { ServiceBusMessage } from './generated/models/ServiceBusModel';
 // Change this to target a different queue.
 const QUEUE_NAME = 'petestest';
 
+// Number of messages to display per page in the message list
+const PAGE_SIZE = 10;
+
 /**
  * Service Bus Explorer — main app component.
  *
@@ -22,6 +25,8 @@ function App() {
   const [status, setStatus] = useState('');
   // True while any async operation is in progress (disables buttons)
   const [loading, setLoading] = useState(false);
+  // Descriptive text shown in the loading banner during long operations
+  const [loadingText, setLoadingText] = useState('');
   // Input value for the Base64 decoder utility
   const [decodeInput, setDecodeInput] = useState('');
   // Tracks which queue type (Main or DeadLetter) was last peeked,
@@ -29,6 +34,18 @@ function App() {
   const [activeQueueType, setActiveQueueType] = useState<'Main' | 'DeadLetter'>('Main');
   // MessageId currently being acted on (shows spinner on that card)
   const [busyMsgId, setBusyMsgId] = useState<string | null>(null);
+  // Current page index for client-side message pagination (0-based)
+  const [page, setPage] = useState(0);
+
+  /** Remove a message from the list and clamp the page index if it would overflow. */
+  const removeMessage = (msgId: string | undefined) => {
+    setMessages((prev) => {
+      const next = prev.filter((m) => m.MessageId !== msgId);
+      // If the current page now has no items, step back one page
+      setPage((p) => Math.min(p, Math.max(0, Math.ceil(next.length / PAGE_SIZE) - 1)));
+      return next;
+    });
+  };
 
   /**
    * Peek messages from the specified queue using peek-lock.
@@ -36,36 +53,86 @@ function App() {
    * Before peeking, any previously held locks are abandoned so those
    * messages become visible again (avoids "0 messages" on re-peek).
    */
+  const unlockMessages = async (queueType: 'Main' | 'DeadLetter') => {
+    const lockedMsgs = messages.filter((m) => m.LockToken);
+    if (lockedMsgs.length === 0) {
+      setMessages([]);
+      setPage(0);
+      setStatus('No locked messages to release');
+      return;
+    }
+    setLoading(true);
+    setLoadingText(`Releasing ${lockedMsgs.length} lock(s)…`);
+    try {
+      await Promise.allSettled(
+        lockedMsgs.map((msg) =>
+          ServiceBusService.AbandonMessageInQueue(
+            QUEUE_NAME, msg.LockToken!, queueType
+          )
+        )
+      );
+      setStatus(`Released ${lockedMsgs.length} lock(s) on ${queueType} queue`);
+    } catch {
+      setStatus('Some locks could not be released (may have expired)');
+    }
+    setMessages([]);
+    setPage(0);
+    setLoadingText('');
+    setLoading(false);
+  };
+
   const peekMessages = async (queueType: 'Main' | 'DeadLetter') => {
     setLoading(true);
     setActiveQueueType(queueType);
-    setStatus(`Peeking ${queueType} queue...`);
+    setPage(0);
+    setLoadingText(`Connecting to ${queueType} queue…`);
+    setStatus('');
     try {
-      // Abandon any existing locks first so messages become visible again.
-      // If a lock has already expired, the abandon call will fail silently.
-      for (const msg of messages) {
-        if (msg.LockToken) {
-          try {
-            await ServiceBusService.AbandonMessageInQueue(
-              QUEUE_NAME, msg.LockToken, activeQueueType
-            );
-          } catch { /* lock may have already expired */ }
-        }
+      // Abandon any existing locks in parallel so messages become visible again.
+      // Promise.allSettled ensures we don't stop on expired-lock errors.
+      const lockedMsgs = messages.filter((m) => m.LockToken);
+      if (lockedMsgs.length > 0) {
+        setLoadingText(`Releasing ${lockedMsgs.length} lock(s)…`);
+        await Promise.allSettled(
+          lockedMsgs.map((msg) =>
+            ServiceBusService.AbandonMessageInQueue(
+              QUEUE_NAME, msg.LockToken!, activeQueueType
+            )
+          )
+        );
       }
       setMessages([]);
 
-      // Fetch up to 10 messages with peek-lock.
-      // Messages remain on the queue until explicitly completed or dead-lettered.
-      const result = await ServiceBusService.GetMessagesFromQueueWithPeekLock(
-        QUEUE_NAME, 10, queueType
-      );
-      if (result.error) {
-        setStatus(`Peek error: ${JSON.stringify(result.error)}`);
-        setLoading(false);
-        return;
+      // Fetch all messages by looping in batches of BATCH_SIZE.
+      // The connector caps how many it returns per call; when a batch
+      // returns fewer than requested, we know the queue is drained.
+      const BATCH_SIZE = 100;
+      const allMsgs: ServiceBusMessage[] = [];
+      let done = false;
+      while (!done) {
+        setLoadingText(
+          allMsgs.length === 0
+            ? `Fetching messages from ${queueType} queue…`
+            : `Fetched ${allMsgs.length} message(s) so far — checking for more…`
+        );
+        const result = await ServiceBusService.GetMessagesFromQueueWithPeekLock(
+          QUEUE_NAME, BATCH_SIZE, queueType
+        );
+        if (result.error) {
+          setStatus(`Peek error: ${JSON.stringify(result.error)}`);
+          setLoading(false);
+          setLoadingText('');
+          // Keep any messages already fetched
+          if (allMsgs.length > 0) setMessages(allMsgs);
+          return;
+        }
+        const batch = result.data ?? [];
+        allMsgs.push(...batch);
+        // If we got fewer than requested, the queue is empty
+        if (batch.length < BATCH_SIZE) done = true;
       }
-      const msgs = result.data ?? [];
-      setMessages(msgs);
+      setMessages(allMsgs);
+      const msgs = allMsgs;
       setStatus(
         msgs.length > 0
           ? `Got ${msgs.length} message(s) from ${queueType} queue — locks held, use actions below`
@@ -74,6 +141,7 @@ function App() {
     } catch (err) {
       setStatus(`Error: ${err}`);
     }
+    setLoadingText('');
     setLoading(false);
   };
 
@@ -92,7 +160,7 @@ function App() {
       await ServiceBusService.CompleteMessageInQueue(
         QUEUE_NAME, msg.LockToken, activeQueueType
       );
-      setMessages((prev) => prev.filter((m) => m.MessageId !== msg.MessageId));
+      removeMessage(msg.MessageId);
       setStatus(`Completed message ${msg.MessageId}`);
     } catch {
       setStatus(`Complete failed (lock may have expired) — re-peek and try again`);
@@ -116,7 +184,7 @@ function App() {
       await ServiceBusService.DeadLetterMessageInQueue(
         QUEUE_NAME, msg.LockToken, undefined, 'Manual dead-letter', 'Dead-lettered via Service Bus Explorer'
       );
-      setMessages((prev) => prev.filter((m) => m.MessageId !== msg.MessageId));
+      removeMessage(msg.MessageId);
       setStatus(`Dead-lettered message ${msg.MessageId}`);
     } catch {
       setStatus(`Dead-letter failed (lock may have expired) — re-peek and try again`);
@@ -135,7 +203,7 @@ function App() {
       await ServiceBusService.AbandonMessageInQueue(
         QUEUE_NAME, msg.LockToken, activeQueueType
       );
-      setMessages((prev) => prev.filter((m) => m.MessageId !== msg.MessageId));
+      removeMessage(msg.MessageId);
       setStatus(`Abandoned message ${msg.MessageId} — returned to queue`);
     } catch {
       setStatus(`Abandon failed — lock may have expired`);
@@ -150,7 +218,8 @@ function App() {
   const sendMessage = async () => {
     if (!sendText.trim()) return;
     setLoading(true);
-    setStatus('Sending...');
+    setLoadingText('Sending message…');
+    setStatus('');
     try {
       // The connector expects ContentData as a base64 string.
       // TextEncoder + manual binary-to-base64 handles multi-byte chars correctly.
@@ -170,6 +239,7 @@ function App() {
     } catch (err: unknown) {
       setStatus(`Send error: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
     }
+    setLoadingText('');
     setLoading(false);
   };
 
@@ -181,7 +251,7 @@ function App() {
       <header className="app-header">
         <div className="icon">🚌</div>
         <h1>Service Bus Explorer</h1>
-        <span className="queue-badge">{QUEUE_NAME}</span>
+        <span className="queue-badge" title="Active Service Bus queue">{QUEUE_NAME}</span>
       </header>
 
       {/* Send panel — type a message and send to the queue */}
@@ -194,7 +264,7 @@ function App() {
             placeholder="Type a message to send..."
             onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
           />
-          <button onClick={sendMessage} disabled={loading || !sendText.trim()}>
+          <button onClick={sendMessage} disabled={loading || !sendText.trim()} title="Send message to queue (base64-encoded)">
             {loading ? <span className="spinner" /> : '↑'} Send
           </button>
         </div>
@@ -208,94 +278,180 @@ function App() {
             className={`toggle-btn ${activeQueueType === 'Main' ? 'active' : ''}`}
             onClick={() => peekMessages('Main')}
             disabled={loading}
+            title="Peek-lock all messages from the main queue"
           >
             📥 Main Queue
+          </button>
+          <button
+            className="btn-unlock"
+            onClick={() => unlockMessages('Main')}
+            disabled={loading || messages.length === 0 || activeQueueType !== 'Main'}
+            title="Release all locks on main queue and clear the table"
+          >
+            🔓 Unlock
           </button>
           <button
             className={`toggle-btn deadletter ${activeQueueType === 'DeadLetter' ? 'active' : ''}`}
             onClick={() => peekMessages('DeadLetter')}
             disabled={loading}
+            title="Peek-lock messages from the dead-letter sub-queue"
           >
             ☠️ Dead Letter
           </button>
+          <button
+            className="btn-unlock"
+            onClick={() => unlockMessages('DeadLetter')}
+            disabled={loading || messages.length === 0 || activeQueueType !== 'DeadLetter'}
+            title="Release all locks on dead-letter queue and clear the table"
+          >
+            🔓 Unlock
+          </button>
         </div>
       </section>
+
+      {/* Loading banner — shown during fetch/send with progress details */}
+      {loading && loadingText && (
+        <div className="loading-banner">
+          <span className="spinner" />
+          <span>{loadingText}</span>
+        </div>
+      )}
 
       {/* Status bar — shows result of the last operation (color-coded) */}
       {status && (
         <p className={`status ${statusType(status)}`}>{status}</p>
       )}
 
-      {/* Message list — each card shows content and action buttons */}
+      {/* Message table — headers matching Azure Portal Service Bus Explorer */}
       {messages.length > 0 ? (
         <section className="panel">
-          <h2>
-            {activeQueueType === 'DeadLetter' ? '☠️ Dead Letter' : '📥 Main'} — {messages.length} message{messages.length !== 1 ? 's' : ''}
-          </h2>
-          <div className="messages">
-            {messages.map((msg, i) => {
-              const isBusy = busyMsgId === msg.MessageId;
-              return (
-              <div key={msg.MessageId ?? i} className={`message-card ${isBusy ? 'busy' : ''}`}>
-                {/* Message metadata row */}
-                <div className="message-header">
-                  <span className="msg-id" title={msg.MessageId ?? ''}>
-                    {msg.MessageId ? `${msg.MessageId.slice(0, 12)}…` : '—'}
-                  </span>
-                  <div className="msg-meta-right">
-                    {msg.SequenceNumber != null && (
-                      <span className="msg-tag">Seq {msg.SequenceNumber}</span>
-                    )}
-                    {msg.CorrelationId && (
-                      <span className="msg-tag">Corr: {msg.CorrelationId}</span>
-                    )}
-                    {msg.ScheduledEnqueueTimeUtc && (
-                      <span className="msg-tag">{formatTime(msg.ScheduledEnqueueTimeUtc)}</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Message body — auto-decoded from base64 */}
-                <div className="message-body">
-                  {safeBase64Decode(msg.ContentData ?? '') || msg.ContentData || '(empty)'}
-                </div>
-
-                {/* Optional metadata fields */}
-                {(msg.Label || msg.SessionId) && (
-                  <div className="message-tags">
-                    {msg.Label && <span className="msg-tag">Label: {msg.Label}</span>}
-                    {msg.SessionId && <span className="msg-tag">Session: {msg.SessionId}</span>}
-                  </div>
-                )}
-
-                {/* Action buttons for this message */}
-                <div className="message-actions">
-                  {/* Complete: permanently remove from queue */}
-                  <button onClick={() => completeMessage(msg)} className="btn-complete" disabled={isBusy}>
-                    {isBusy ? <span className="spinner" /> : '✓'} Complete
-                  </button>
-                  {/* Dead Letter: move to dead-letter sub-queue (main queue only) */}
-                  {activeQueueType === 'Main' && (
-                    <button onClick={() => deadLetterMessage(msg)} className="btn-deadletter" disabled={isBusy}>
-                      {isBusy ? <span className="spinner" /> : '☠️'} Dead Letter
-                    </button>
-                  )}
-                  {/* Abandon: release lock, return message to queue */}
-                  <button onClick={() => abandonMessage(msg)} className="btn-abandon" disabled={isBusy}>
-                    ↩ Abandon
-                  </button>
-                  {/* Decode: copy ContentData to the Base64 decoder panel */}
-                  <button
-                    onClick={() => setDecodeInput(msg.ContentData ?? '')}
-                    className="btn-decode"
-                  >
-                    🔓 Decode
-                  </button>
-                </div>
-              </div>
-              );
-            })}
+          <div className="messages-header">
+            <h2>
+              {activeQueueType === 'DeadLetter' ? '☠️ Dead Letter' : '📥 Main'} — {messages.length} message{messages.length !== 1 ? 's' : ''}
+            </h2>
+            {messages.length > PAGE_SIZE && (
+              <span className="showing-range">
+                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, messages.length)}
+              </span>
+            )}
           </div>
+          <div className="msg-table-wrap">
+            <table className="msg-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Sequence Number</th>
+                  <th>Message ID</th>
+                  <th>State</th>
+                  <th>Body Size</th>
+                  <th>Content Type</th>
+                  <th>Label / Subject</th>
+                  <th>Correlation ID</th>
+                  {activeQueueType === 'DeadLetter' && <th>Dead Letter Reason</th>}
+                  {activeQueueType === 'DeadLetter' && <th>DL Error</th>}
+                  <th>Message Text</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {messages.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((msg, i) => {
+                  const isBusy = busyMsgId === msg.MessageId;
+                  const rowNum = page * PAGE_SIZE + i + 1;
+                  const decoded = safeBase64Decode(msg.ContentData ?? '') || msg.ContentData || '(empty)';
+                  const bodySize = msg.ContentData
+                    ? `${Math.ceil((msg.ContentData.length * 3) / 4)} B`
+                    : '—';
+                  const props = (msg.Properties ?? {}) as Record<string, unknown>;
+                  const dlReason = (props['DeadLetterReason'] ?? props['deadLetterReason'] ?? '') as string;
+                  const dlError = (props['DeadLetterErrorDescription'] ?? props['deadLetterErrorDescription'] ?? '') as string;
+                  return (
+                  <tr key={msg.MessageId ?? i} className={isBusy ? 'busy' : ''}>
+                    <td className="cell-num">{rowNum}</td>
+                    <td className="cell-seq">{msg.SequenceNumber ?? '—'}</td>
+                    <td className="cell-id" title={msg.MessageId ?? ''}>{msg.MessageId ?? '—'}</td>
+                    <td className="cell-state">
+                      <span className={`state-badge ${activeQueueType === 'DeadLetter' ? 'dead' : 'active'}`}>
+                        {activeQueueType === 'DeadLetter' ? 'Dead-lettered' : 'Active'}
+                      </span>
+                    </td>
+                    <td className="cell-size">{bodySize}</td>
+                    <td className="cell-ct">{msg.ContentType || '—'}</td>
+                    <td className="cell-label">{msg.Label || '—'}</td>
+                    <td className="cell-corr" title={msg.CorrelationId ?? ''}>{msg.CorrelationId || '—'}</td>
+                    {activeQueueType === 'DeadLetter' && <td className="cell-dlr" title={dlReason}>{dlReason || '—'}</td>}
+                    {activeQueueType === 'DeadLetter' && <td className="cell-dle" title={dlError}>{dlError || '—'}</td>}
+                    <td className="cell-body" title={decoded}>{decoded}</td>
+                    <td className="cell-actions">
+                      <button onClick={() => completeMessage(msg)} className="btn-complete" disabled={isBusy} title="Permanently remove this message from the queue">
+                        {isBusy ? <span className="spinner" /> : '✓'}
+                      </button>
+                      {activeQueueType === 'Main' && (
+                        <button onClick={() => deadLetterMessage(msg)} className="btn-deadletter" disabled={isBusy} title="Move to dead-letter sub-queue">
+                          {isBusy ? <span className="spinner" /> : '☠️'}
+                        </button>
+                      )}
+                      <button onClick={() => abandonMessage(msg)} className="btn-abandon" disabled={isBusy} title="Release lock and return to queue">
+                        ↩
+                      </button>
+                      <button onClick={() => setDecodeInput(msg.ContentData ?? '')} className="btn-decode" title="Copy to decoder">
+                        🔓
+                      </button>
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination controls — shown when messages exceed one page */}
+          {messages.length > PAGE_SIZE && (() => {
+            const totalPages = Math.ceil(messages.length / PAGE_SIZE);
+            // Build a compact set of page numbers: first, last, and neighbours of current
+            const pageNums = Array.from(new Set(
+              [0, page - 1, page, page + 1, totalPages - 1].filter((n) => n >= 0 && n < totalPages)
+            )).sort((a, b) => a - b);
+            // Insert -1 as a gap marker between non-consecutive numbers
+            const withGaps: number[] = [];
+            pageNums.forEach((n, idx) => {
+              if (idx > 0 && n - pageNums[idx - 1] > 1) withGaps.push(-1);
+              withGaps.push(n);
+            });
+            return (
+            <div className="pagination">
+              <button
+                className="secondary"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                title="Previous page"
+              >
+                ←
+              </button>
+              {withGaps.map((n, idx) =>
+                n === -1 ? (
+                  <span key={`gap-${idx}`} className="page-ellipsis">…</span>
+                ) : (
+                  <button
+                    key={n}
+                    className={`page-btn ${n === page ? 'active' : ''}`}
+                    onClick={() => setPage(n)}
+                    title={`Page ${n + 1}`}
+                  >
+                    {n + 1}
+                  </button>
+                )
+              )}
+              <button
+                className="secondary"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={(page + 1) * PAGE_SIZE >= messages.length}
+                title="Next page"
+              >
+                →
+              </button>
+            </div>
+            );
+          })()}
         </section>
       ) : (
         // Empty state shown after a peek returns no messages
@@ -332,18 +488,6 @@ const statusType = (s: string): 'error' | 'success' | 'info' => {
   return 'info';
 };
 
-/** Format a UTC date string into a short, readable local time. */
-const formatTime = (utc: string): string => {
-  try {
-    return new Date(utc).toLocaleString(undefined, {
-      month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
-  } catch {
-    return utc;
-  }
-};
-
 /**
  * Safely decode a base64 string to UTF-8 text.
  * Handles URL-safe base64 variants (- and _ characters)
@@ -360,12 +504,17 @@ const safeBase64Decode = (encoded: string): string => {
     }
     // Decode base64 → binary string → URI-encoded → UTF-8 text
     const decoded = atob(base64);
-    return decodeURIComponent(
+    const text = decodeURIComponent(
       decoded
         .split('')
         .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
         .join('')
     );
+    // Strip wrapping double-quotes added by JSON serialisation
+    if (text.length >= 2 && text.startsWith('"') && text.endsWith('"')) {
+      return text.slice(1, -1);
+    }
+    return text;
   } catch {
     return encoded; // Return raw if not valid base64
   }

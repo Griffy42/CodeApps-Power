@@ -26,3 +26,4 @@ dist-ssr
 # Local/personal files
 README.local.md
 power.config.json
+scripts/

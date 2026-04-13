@@ -1,8 +1,8 @@
 /* ── Layout ── */
 .app {
-  max-width: 860px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 2rem 1.5rem 3rem;
+  padding: 2rem 2.5rem 3rem;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
@@ -149,6 +149,29 @@ textarea {
   cursor: not-allowed;
 }
 
+.btn-unlock {
+  padding: 0.5rem 0.85rem;
+  border: none;
+  border-radius: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: rgba(251, 191, 36, 0.1);
+  color: rgba(251, 191, 36, 0.6);
+  transition: all 0.25s ease;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-unlock:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.btn-unlock:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 /* ── Buttons ── */
 .button-row {
   display: flex;
@@ -230,92 +253,148 @@ button.secondary:hover:not(:disabled) {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Messages ── */
-.messages {
+/* ── Loading Banner ── */
+.loading-banner {
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.message-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.15rem;
+  margin-bottom: 1rem;
   border-radius: 10px;
-  padding: 1rem 1.15rem;
-  transition: border-color 0.2s, opacity 0.2s;
+  background: rgba(0, 120, 212, 0.1);
+  border: 1px solid rgba(0, 120, 212, 0.2);
+  color: #60b4f7;
+  font-size: 0.88rem;
+  animation: slideIn 0.25s ease, pulse 2s ease-in-out infinite;
 }
 
-.message-card:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+.loading-banner .spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2.5px;
+  flex-shrink: 0;
 }
 
-.message-card.busy {
-  opacity: 0.55;
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ── Message Table ── */
+.msg-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -0.5rem;
+  padding: 0 0.5rem;
+}
+
+.msg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.msg-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.msg-table td {
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
+  vertical-align: middle;
+}
+
+.msg-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.msg-table tbody tr.busy {
+  opacity: 0.5;
   pointer-events: none;
 }
 
-.message-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.72rem;
+.cell-num {
   color: rgba(255, 255, 255, 0.4);
-  margin-bottom: 0.5rem;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-weight: 600;
+  text-align: center;
+  min-width: 32px;
 }
 
-.msg-id {
-  max-width: 130px;
+.cell-seq {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.78rem;
+}
+
+.cell-id {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.72rem;
+  max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.cell-state .state-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.state-badge.active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.state-badge.dead {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.cell-size {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.cell-ct, .cell-label, .cell-corr, .cell-dlr, .cell-dle {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-body {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.cell-actions {
   white-space: nowrap;
-}
-
-.msg-meta-right {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.msg-tag {
-  background: rgba(255, 255, 255, 0.06);
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.45);
-  white-space: nowrap;
-}
-
-.message-tags {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.35rem;
-}
-
-.message-body {
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-  font-size: 0.85rem;
-  font-weight: 400;
-  word-break: break-all;
-  margin-bottom: 0.5rem;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.78);
-}
-
-.message-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  padding-top: 0.65rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 0.3rem;
 }
 
 .btn-complete {
   background: rgba(16, 185, 129, 0.15);
   color: #34d399;
-  font-size: 0.8rem;
-  padding: 0.4rem 0.85rem;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.7rem;
 }
 
 .btn-complete:hover:not(:disabled) {
@@ -326,8 +405,8 @@ button.secondary:hover:not(:disabled) {
 .btn-decode {
   background: rgba(139, 92, 246, 0.15);
   color: #a78bfa;
-  font-size: 0.8rem;
-  padding: 0.4rem 0.85rem;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.7rem;
 }
 
 .btn-decode:hover:not(:disabled) {
@@ -338,8 +417,8 @@ button.secondary:hover:not(:disabled) {
 .btn-deadletter {
   background: rgba(239, 68, 68, 0.15);
   color: #f87171;
-  font-size: 0.8rem;
-  padding: 0.4rem 0.85rem;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.7rem;
 }
 
 .btn-deadletter:hover:not(:disabled) {
@@ -350,8 +429,8 @@ button.secondary:hover:not(:disabled) {
 .btn-abandon {
   background: rgba(251, 191, 36, 0.12);
   color: #fbbf24;
-  font-size: 0.8rem;
-  padding: 0.4rem 0.85rem;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.7rem;
 }
 
 .btn-abandon:hover:not(:disabled) {
@@ -365,6 +444,60 @@ button.secondary:hover:not(:disabled) {
   padding: 2rem 1rem;
   color: rgba(255, 255, 255, 0.3);
   font-size: 0.9rem;
+}
+
+/* ── Pagination ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.page-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  border: none;
+  border-radius: 6px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.page-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transform: none;
+  box-shadow: none;
+}
+
+.page-btn.active {
+  background: rgba(0, 120, 212, 0.25);
+  color: #60b4f7;
+  font-weight: 600;
+}
+
+.page-ellipsis {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.8rem;
+  padding: 0 0.15rem;
+}
+
+.page-info {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.45);
+  min-width: 90px;
+  text-align: center;
 }
 
 /* ── Loading spinner ── */
@@ -395,4 +528,168 @@ button.secondary:hover:not(:disabled) {
   min-height: 2.5rem;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* ── Responsive: Tablet (≤768px) ── */
+@media (max-width: 768px) {
+  .app {
+    padding: 1.25rem 1rem 2rem;
+  }
+
+  .app-header h1 {
+    font-size: 1.2rem;
+  }
+
+  .panel {
+    padding: 1rem 1.1rem;
+    border-radius: 10px;
+  }
+
+  .cell-actions {
+    gap: 0.2rem;
+  }
+
+  .btn-complete,
+  .btn-deadletter,
+  .btn-abandon,
+  .btn-decode {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.55rem;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .page-btn {
+    min-width: 28px;
+    height: 28px;
+    font-size: 0.72rem;
+  }
+}
+
+/* ── Responsive: Mobile (≤480px) ── */
+@media (max-width: 480px) {
+  .app {
+    padding: 0.75rem 0.65rem 1.5rem;
+  }
+
+  .app-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .app-header .icon {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+  }
+
+  .app-header h1 {
+    font-size: 1.05rem;
+  }
+
+  .app-header .queue-badge {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.55rem;
+  }
+
+  .panel {
+    padding: 0.75rem 0.85rem;
+    border-radius: 8px;
+    margin-bottom: 0.65rem;
+  }
+
+  .panel h2 {
+    font-size: 0.75rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .send-row {
+    flex-direction: column;
+  }
+
+  .send-row input {
+    width: 100%;
+  }
+
+  .send-row button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .toggle-btn {
+    padding: 0.55rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .messages-header {
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .message-card {
+    padding: 0.55rem 0.7rem;
+  }
+
+  .message-header {
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .msg-id {
+    max-width: 100px;
+  }
+
+  .msg-meta-right {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .message-body {
+    font-size: 0.78rem;
+  }
+
+  .message-actions {
+    gap: 0.25rem;
+  }
+
+  .btn-complete,
+  .btn-deadletter,
+  .btn-abandon,
+  .btn-decode {
+    font-size: 0.65rem;
+    padding: 0.25rem 0.5rem;
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .loading-banner {
+    font-size: 0.8rem;
+    padding: 0.65rem 0.85rem;
+  }
+
+  .status {
+    font-size: 0.78rem;
+    padding: 0.45rem 0.75rem;
+  }
+
+  .decoder-output {
+    font-size: 0.78rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .pagination {
+    gap: 0.2rem;
+  }
+
+  .page-btn {
+    min-width: 26px;
+    height: 26px;
+    font-size: 0.68rem;
+  }
 }
