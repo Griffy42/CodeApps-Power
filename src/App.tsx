@@ -27,6 +27,8 @@ function App() {
   // Tracks which queue type (Main or DeadLetter) was last peeked,
   // so that complete/abandon/dead-letter target the correct sub-queue
   const [activeQueueType, setActiveQueueType] = useState<'Main' | 'DeadLetter'>('Main');
+  // MessageId currently being acted on (shows spinner on that card)
+  const [busyMsgId, setBusyMsgId] = useState<string | null>(null);
 
   /**
    * Peek messages from the specified queue using peek-lock.
@@ -70,7 +72,6 @@ function App() {
           : `No messages in ${queueType} queue`
       );
     } catch (err) {
-      console.error(err);
       setStatus(`Error: ${err}`);
     }
     setLoading(false);
@@ -85,16 +86,18 @@ function App() {
       setStatus('No lock token — re-peek first');
       return;
     }
+    if (!confirm('Complete this message? It will be permanently removed from the queue.')) return;
+    setBusyMsgId(msg.MessageId ?? null);
     try {
       await ServiceBusService.CompleteMessageInQueue(
         QUEUE_NAME, msg.LockToken, activeQueueType
       );
       setMessages((prev) => prev.filter((m) => m.MessageId !== msg.MessageId));
       setStatus(`Completed message ${msg.MessageId}`);
-    } catch (err) {
-      console.error(err);
+    } catch {
       setStatus(`Complete failed (lock may have expired) — re-peek and try again`);
     }
+    setBusyMsgId(null);
   };
 
   /**
@@ -107,16 +110,18 @@ function App() {
       setStatus('No lock token — re-peek first');
       return;
     }
+    if (!confirm('Dead-letter this message? It will be moved to the Dead Letter sub-queue.')) return;
+    setBusyMsgId(msg.MessageId ?? null);
     try {
       await ServiceBusService.DeadLetterMessageInQueue(
         QUEUE_NAME, msg.LockToken, undefined, 'Manual dead-letter', 'Dead-lettered via Service Bus Explorer'
       );
       setMessages((prev) => prev.filter((m) => m.MessageId !== msg.MessageId));
       setStatus(`Dead-lettered message ${msg.MessageId}`);
-    } catch (err) {
-      console.error(err);
+    } catch {
       setStatus(`Dead-letter failed (lock may have expired) — re-peek and try again`);
     }
+    setBusyMsgId(null);
   };
 
   /**
@@ -125,16 +130,17 @@ function App() {
    */
   const abandonMessage = async (msg: ServiceBusMessage) => {
     if (!msg.LockToken) return;
+    setBusyMsgId(msg.MessageId ?? null);
     try {
       await ServiceBusService.AbandonMessageInQueue(
         QUEUE_NAME, msg.LockToken, activeQueueType
       );
       setMessages((prev) => prev.filter((m) => m.MessageId !== msg.MessageId));
       setStatus(`Abandoned message ${msg.MessageId} — returned to queue`);
-    } catch (err) {
-      console.error(err);
+    } catch {
       setStatus(`Abandon failed — lock may have expired`);
     }
+    setBusyMsgId(null);
   };
 
   /**
@@ -147,14 +153,21 @@ function App() {
     setStatus('Sending...');
     try {
       // The connector expects ContentData as a base64 string.
-      // encodeURIComponent handles multi-byte chars, unescape converts to binary, btoa encodes.
-      const encoded = btoa(unescape(encodeURIComponent(sendText)));
+      // TextEncoder + manual binary-to-base64 handles multi-byte chars correctly.
+      const bytes = new TextEncoder().encode(sendText);
+      const encoded = btoa(String.fromCharCode(...bytes));
       const message = { ContentData: encoded, ContentType: 'text/plain' };
       const result = await ServiceBusService.SendMessage(QUEUE_NAME, message);
       setSendText('');
-      setStatus(result.error ? `Send error: ${JSON.stringify(result.error)}` : 'Message sent!');
+      if (result.error) {
+        setStatus(`Send error: ${JSON.stringify(result.error)}`);
+      } else {
+        setStatus('Message sent!');
+        // Re-peek the active queue so the new message appears immediately
+        await peekMessages(activeQueueType);
+        return; // peekMessages already sets loading to false
+      }
     } catch (err: unknown) {
-      console.error(err);
       setStatus(`Send error: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
     }
     setLoading(false);
@@ -187,15 +200,23 @@ function App() {
         </div>
       </section>
 
-      {/* Peek panel — read messages from Main or Dead Letter queue */}
+      {/* Peek panel — toggle between Main and Dead Letter queue */}
       <section className="panel">
         <h2>Read Messages</h2>
-        <div className="button-row">
-          <button onClick={() => peekMessages('Main')} disabled={loading}>
-            {loading ? <span className="spinner" /> : '📥'} Peek Main Queue
+        <div className="queue-toggle">
+          <button
+            className={`toggle-btn ${activeQueueType === 'Main' ? 'active' : ''}`}
+            onClick={() => peekMessages('Main')}
+            disabled={loading}
+          >
+            📥 Main Queue
           </button>
-          <button className="secondary" onClick={() => peekMessages('DeadLetter')} disabled={loading}>
-            ☠️ Peek Dead Letter
+          <button
+            className={`toggle-btn deadletter ${activeQueueType === 'DeadLetter' ? 'active' : ''}`}
+            onClick={() => peekMessages('DeadLetter')}
+            disabled={loading}
+          >
+            ☠️ Dead Letter
           </button>
         </div>
       </section>
@@ -208,16 +229,30 @@ function App() {
       {/* Message list — each card shows content and action buttons */}
       {messages.length > 0 ? (
         <section className="panel">
-          <h2>Messages ({messages.length})</h2>
+          <h2>
+            {activeQueueType === 'DeadLetter' ? '☠️ Dead Letter' : '📥 Main'} — {messages.length} message{messages.length !== 1 ? 's' : ''}
+          </h2>
           <div className="messages">
-            {messages.map((msg, i) => (
-              <div key={msg.MessageId ?? i} className="message-card">
-                {/* Message metadata */}
+            {messages.map((msg, i) => {
+              const isBusy = busyMsgId === msg.MessageId;
+              return (
+              <div key={msg.MessageId ?? i} className={`message-card ${isBusy ? 'busy' : ''}`}>
+                {/* Message metadata row */}
                 <div className="message-header">
-                  <span className="msg-id">ID: {msg.MessageId ?? '—'}</span>
-                  {msg.SequenceNumber != null && (
-                    <span className="msg-seq">Seq: {msg.SequenceNumber}</span>
-                  )}
+                  <span className="msg-id" title={msg.MessageId ?? ''}>
+                    {msg.MessageId ? `${msg.MessageId.slice(0, 12)}…` : '—'}
+                  </span>
+                  <div className="msg-meta-right">
+                    {msg.SequenceNumber != null && (
+                      <span className="msg-tag">Seq {msg.SequenceNumber}</span>
+                    )}
+                    {msg.CorrelationId && (
+                      <span className="msg-tag">Corr: {msg.CorrelationId}</span>
+                    )}
+                    {msg.ScheduledEnqueueTimeUtc && (
+                      <span className="msg-tag">{formatTime(msg.ScheduledEnqueueTimeUtc)}</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Message body — auto-decoded from base64 */}
@@ -226,27 +261,27 @@ function App() {
                 </div>
 
                 {/* Optional metadata fields */}
-                {msg.Label && (
-                  <div className="message-label">Label: {msg.Label}</div>
-                )}
-                {msg.SessionId && (
-                  <div className="message-label">Session: {msg.SessionId}</div>
+                {(msg.Label || msg.SessionId) && (
+                  <div className="message-tags">
+                    {msg.Label && <span className="msg-tag">Label: {msg.Label}</span>}
+                    {msg.SessionId && <span className="msg-tag">Session: {msg.SessionId}</span>}
+                  </div>
                 )}
 
                 {/* Action buttons for this message */}
                 <div className="message-actions">
                   {/* Complete: permanently remove from queue */}
-                  <button onClick={() => completeMessage(msg)} className="btn-complete">
-                    ✓ Complete
+                  <button onClick={() => completeMessage(msg)} className="btn-complete" disabled={isBusy}>
+                    {isBusy ? <span className="spinner" /> : '✓'} Complete
                   </button>
                   {/* Dead Letter: move to dead-letter sub-queue (main queue only) */}
                   {activeQueueType === 'Main' && (
-                    <button onClick={() => deadLetterMessage(msg)} className="btn-deadletter">
-                      ☠️ Dead Letter
+                    <button onClick={() => deadLetterMessage(msg)} className="btn-deadletter" disabled={isBusy}>
+                      {isBusy ? <span className="spinner" /> : '☠️'} Dead Letter
                     </button>
                   )}
                   {/* Abandon: release lock, return message to queue */}
-                  <button onClick={() => abandonMessage(msg)} className="btn-abandon">
+                  <button onClick={() => abandonMessage(msg)} className="btn-abandon" disabled={isBusy}>
                     ↩ Abandon
                   </button>
                   {/* Decode: copy ContentData to the Base64 decoder panel */}
@@ -258,7 +293,8 @@ function App() {
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       ) : (
@@ -294,6 +330,18 @@ const statusType = (s: string): 'error' | 'success' | 'info' => {
   if (/error|failed/i.test(s)) return 'error';
   if (/Got|sent|Completed|Dead-lettered|Abandoned/i.test(s)) return 'success';
   return 'info';
+};
+
+/** Format a UTC date string into a short, readable local time. */
+const formatTime = (utc: string): string => {
+  try {
+    return new Date(utc).toLocaleString(undefined, {
+      month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return utc;
+  }
 };
 
 /**
