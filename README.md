@@ -87,6 +87,20 @@ A React + TypeScript + Vite app deployed as a [Power Apps Code App](https://lear
 
 The signed-in user needs **Azure Service Bus Data Owner** (or Data Sender + Data Receiver) role on the Service Bus namespace for the Entra ID connector to work.
 
+## Sharing with Other Users
+
+When another user opens the app for the first time, Power Platform will prompt them to create a Service Bus connection (including the namespace endpoint). To avoid this:
+
+1. **Share your existing connection** (recommended)
+   - Go to [make.powerapps.com](https://make.powerapps.com) → **Connections**
+   - Find your Service Bus connection → **…** → **Share**
+   - Add the users — they'll automatically use the shared connection without seeing the setup dialog
+
+2. **Use a Solution with a Connection Reference** (formal/enterprise)
+   - Package the app into a Power Platform Solution
+   - Add a Connection Reference for Service Bus with the namespace pre-configured
+   - An admin configures the connection once at deployment time, and all users share it
+
 ## Project Structure
 
 ```
