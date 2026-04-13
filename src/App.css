@@ -1,0 +1,322 @@
+/* ── Layout ── */
+.app {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Header ── */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-header .icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0078d4, #50e6ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.app-header .queue-badge {
+  margin-left: auto;
+  background: rgba(80, 230, 255, 0.1);
+  color: #50e6ff;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid rgba(80, 230, 255, 0.2);
+}
+
+/* ── Panels ── */
+.panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+  backdrop-filter: blur(10px);
+}
+
+.panel h2 {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Inputs ── */
+.send-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.send-row input {
+  flex: 1;
+}
+
+input, textarea {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #eee;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.2);
+}
+
+input::placeholder, textarea::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+textarea {
+  margin-top: 0.5rem;
+  resize: vertical;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+}
+
+/* ── Buttons ── */
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+button {
+  padding: 0.55rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: #0078d4;
+  color: #fff;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+button:hover:not(:disabled) {
+  background: #1a8fe0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 120, 212, 0.3);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ccc;
+}
+
+button.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Status Bar ── */
+.status {
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: slideIn 0.25s ease;
+}
+
+.status.info {
+  background: rgba(0, 120, 212, 0.12);
+  border: 1px solid rgba(0, 120, 212, 0.25);
+  color: #60b4f7;
+}
+
+.status.success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #34d399;
+}
+
+.status.error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Messages ── */
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.message-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 1rem 1.15rem;
+  transition: border-color 0.2s;
+}
+
+.message-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 0.5rem;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+
+.message-body {
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.message-label {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.message-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn-complete {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.btn-complete:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.25);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.btn-decode {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.btn-decode:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.25);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+}
+
+.btn-deadletter {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.btn-deadletter:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+.btn-abandon {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.btn-abandon:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.22);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.2);
+}
+
+/* ── Empty state ── */
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.9rem;
+}
+
+/* ── Loading spinner ── */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Decoder panel ── */
+.decoder-output {
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+  min-height: 2.5rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
