@@ -3,9 +3,8 @@ import './App.css';
 import { ServiceBusService } from './generated';
 import type { ServiceBusMessage } from './generated/models/ServiceBusModel';
 
-// The Service Bus queue name to interact with.
-// Change this to target a different queue.
-const QUEUE_NAME = 'petestest';
+// Default queue name from environment, falls back to empty string
+const DEFAULT_QUEUE = import.meta.env.VITE_QUEUE_NAME || '';
 
 // Number of messages to display per page in the message list
 const PAGE_SIZE = 10;
@@ -27,6 +26,15 @@ type ThemeId = (typeof THEMES)[number]['id'];
  * messages on an Azure Service Bus queue via the Power Apps connector.
  */
 function App() {
+  // ── Queue name (persisted to localStorage) ──
+  const [queueName, setQueueName] = useState(() => {
+    return localStorage.getItem('sb-queue-name') || DEFAULT_QUEUE;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sb-queue-name', queueName);
+  }, [queueName]);
+
   // ── Theme ──
   const [theme, setTheme] = useState<ThemeId>(() => {
     return (localStorage.getItem('sb-theme') as ThemeId) || 'dark';
@@ -87,7 +95,7 @@ function App() {
     const results = await Promise.allSettled(
       lockedMsgs.map((msg) =>
         ServiceBusService.AbandonMessageInQueue(
-          QUEUE_NAME, msg.LockToken!, queueType
+          queueName, msg.LockToken!, queueType
         )
       )
     );
@@ -118,7 +126,7 @@ function App() {
         await Promise.allSettled(
           lockedMsgs.map((msg) =>
             ServiceBusService.AbandonMessageInQueue(
-              QUEUE_NAME, msg.LockToken!, queueType
+              queueName, msg.LockToken!, queueType
             )
           )
         );
@@ -138,7 +146,7 @@ function App() {
             : `Fetched ${allMsgs.length} message(s) so far — checking for more…`
         );
         const result = await ServiceBusService.GetMessagesFromQueueWithPeekLock(
-          QUEUE_NAME, BATCH_SIZE, queueType
+          queueName, BATCH_SIZE, queueType
         );
         if (result.error) {
           setStatus(`Peek error: ${JSON.stringify(result.error)}`);
@@ -180,7 +188,7 @@ function App() {
     setBusyMsgId(msg.MessageId ?? null);
     try {
       await ServiceBusService.CompleteMessageInQueue(
-        QUEUE_NAME, msg.LockToken, activeQueueType
+        queueName, msg.LockToken, activeQueueType
       );
       removeMessage(msg.MessageId);
       setStatus(`Completed message ${msg.MessageId}`);
@@ -204,7 +212,7 @@ function App() {
     setBusyMsgId(msg.MessageId ?? null);
     try {
       await ServiceBusService.DeadLetterMessageInQueue(
-        QUEUE_NAME, msg.LockToken, undefined, 'Manual dead-letter', 'Dead-lettered via Service Bus Explorer'
+        queueName, msg.LockToken, undefined, 'Manual dead-letter', 'Dead-lettered via Service Bus Explorer'
       );
       removeMessage(msg.MessageId);
       setStatus(`Dead-lettered message ${msg.MessageId}`);
@@ -223,7 +231,7 @@ function App() {
     setBusyMsgId(msg.MessageId ?? null);
     try {
       await ServiceBusService.AbandonMessageInQueue(
-        QUEUE_NAME, msg.LockToken, activeQueueType
+        queueName, msg.LockToken, activeQueueType
       );
       removeMessage(msg.MessageId);
       setStatus(`Abandoned message ${msg.MessageId} — returned to queue`);
@@ -244,7 +252,7 @@ function App() {
         const text = `Sample message #${i} — created ${new Date().toLocaleString()}`;
         const bytes = new TextEncoder().encode(text);
         const encoded = btoa(String.fromCharCode(...bytes));
-        await ServiceBusService.SendMessage(QUEUE_NAME, { ContentData: encoded, ContentType: 'text/plain' });
+        await ServiceBusService.SendMessage(queueName, { ContentData: encoded, ContentType: 'text/plain' });
       }
       setStatus(`Seeded ${SEED_COUNT} sample messages`);
       await peekMessages(activeQueueType);
@@ -271,7 +279,7 @@ function App() {
       const bytes = new TextEncoder().encode(sendText);
       const encoded = btoa(String.fromCharCode(...bytes));
       const message = { ContentData: encoded, ContentType: 'text/plain' };
-      const result = await ServiceBusService.SendMessage(QUEUE_NAME, message);
+      const result = await ServiceBusService.SendMessage(queueName, message);
       setSendText('');
       if (result.error) {
         setStatus(`Send error: ${JSON.stringify(result.error)}`);
@@ -308,7 +316,13 @@ function App() {
             </button>
           ))}
         </div>
-        <span className="queue-badge" title="Active Service Bus queue">{QUEUE_NAME}</span>
+        <input
+          className="queue-input"
+          value={queueName}
+          onChange={(e) => setQueueName(e.target.value)}
+          placeholder="queue name"
+          title="Service Bus queue name"
+        />
         <button className="btn-seed" onClick={seedMessages} disabled={loading} title="Send 30 sample messages to the queue">
           🌱 Seed 30
         </button>

@@ -45,6 +45,28 @@
   border: 1px solid var(--info-border);
 }
 
+.app-header .queue-input {
+  background: var(--info-bg);
+  color: var(--info-color);
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid var(--info-border);
+  outline: none;
+  width: 10rem;
+  transition: border-color 0.2s;
+}
+
+.app-header .queue-input:focus {
+  border-color: var(--accent);
+}
+
+.app-header .queue-input::placeholder {
+  color: var(--info-color);
+  opacity: 0.5;
+}
+
 /* ── Theme Picker ── */
 .theme-picker {
   display: flex;
