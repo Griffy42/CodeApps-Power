@@ -4,6 +4,7 @@ import { ServiceBusService } from './generated';
 import type { ServiceBusMessage } from './generated/models/ServiceBusModel';
 
 // The Service Bus queue name to interact with.
+// Change this to target a different queue.
 const QUEUE_NAME = 'petestest';
 
 // Number of messages to display per page in the message list
@@ -51,10 +52,12 @@ function App() {
   // Tracks which queue type (Main or DeadLetter) was last peeked,
   // so that complete/abandon/dead-letter target the correct sub-queue
   const [activeQueueType, setActiveQueueType] = useState<'Main' | 'DeadLetter'>('Main');
-  // MessageId currently being acted on (shows spinner on that card)
+  // MessageId currently being acted on (shows spinner on that row)
   const [busyMsgId, setBusyMsgId] = useState<string | null>(null);
   // Current page index for client-side message pagination (0-based)
   const [page, setPage] = useState(0);
+  // True after at least one peek has completed (drives empty-state display)
+  const [hasPeeked, setHasPeeked] = useState(false);
 
   /** Remove a message from the list and clamp the page index if it would overflow. */
   const removeMessage = (msgId: string | undefined) => {
@@ -67,10 +70,9 @@ function App() {
   };
 
   /**
-   * Peek messages from the specified queue using peek-lock.
-   * Peek-lock reads messages without removing them, but holds a lock.
-   * Before peeking, any previously held locks are abandoned so those
-   * messages become visible again (avoids "0 messages" on re-peek).
+   * Release all peek-lock holds on previously fetched messages.
+   * Abandons every locked message so they become visible to other
+   * consumers again, then clears the local message list.
    */
   const unlockMessages = async (queueType: 'Main' | 'DeadLetter') => {
     const lockedMsgs = messages.filter((m) => m.LockToken);
@@ -82,17 +84,18 @@ function App() {
     }
     setLoading(true);
     setLoadingText(`Releasing ${lockedMsgs.length} lock(s)…`);
-    try {
-      await Promise.allSettled(
-        lockedMsgs.map((msg) =>
-          ServiceBusService.AbandonMessageInQueue(
-            QUEUE_NAME, msg.LockToken!, queueType
-          )
+    const results = await Promise.allSettled(
+      lockedMsgs.map((msg) =>
+        ServiceBusService.AbandonMessageInQueue(
+          QUEUE_NAME, msg.LockToken!, queueType
         )
-      );
+      )
+    );
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) {
+      setStatus(`Released ${lockedMsgs.length - failed} lock(s), ${failed} failed (may have expired)`);
+    } else {
       setStatus(`Released ${lockedMsgs.length} lock(s) on ${queueType} queue`);
-    } catch {
-      setStatus('Some locks could not be released (may have expired)');
     }
     setMessages([]);
     setPage(0);
@@ -115,7 +118,7 @@ function App() {
         await Promise.allSettled(
           lockedMsgs.map((msg) =>
             ServiceBusService.AbandonMessageInQueue(
-              QUEUE_NAME, msg.LockToken!, activeQueueType
+              QUEUE_NAME, msg.LockToken!, queueType
             )
           )
         );
@@ -151,10 +154,10 @@ function App() {
         if (batch.length < BATCH_SIZE) done = true;
       }
       setMessages(allMsgs);
-      const msgs = allMsgs;
+      setHasPeeked(true);
       setStatus(
-        msgs.length > 0
-          ? `Got ${msgs.length} message(s) from ${queueType} queue — locks held, use actions below`
+        allMsgs.length > 0
+          ? `Got ${allMsgs.length} message(s) from ${queueType} queue — locks held, use actions below`
           : `No messages in ${queueType} queue`
       );
     } catch (err) {
@@ -301,7 +304,7 @@ function App() {
               onClick={() => setTheme(t.id)}
               title={t.label}
             >
-              {t.label}
+              {t.icon}
             </button>
           ))}
         </div>
@@ -512,7 +515,7 @@ function App() {
         </section>
       ) : (
         // Empty state shown after a peek returns no messages
-        !loading && messages.length === 0 && status.includes('Got') && (
+        !loading && messages.length === 0 && hasPeeked && (
           <div className="empty-state">No messages in queue</div>
         )
       )}
@@ -541,7 +544,7 @@ function App() {
  */
 const statusType = (s: string): 'error' | 'success' | 'info' => {
   if (/error|failed/i.test(s)) return 'error';
-  if (/Got|sent|Completed|Dead-lettered|Abandoned/i.test(s)) return 'success';
+  if (/Got|sent|Completed|Dead-lettered|Abandoned|Released|Seeded/i.test(s)) return 'success';
   return 'info';
 };
 

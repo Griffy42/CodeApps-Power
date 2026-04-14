@@ -60,12 +60,12 @@
   background: transparent;
   border: none;
   border-radius: 7px;
-  padding: 0.35rem 0.65rem;
-  font-size: 0.78rem;
-  font-weight: 500;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
   cursor: pointer;
   color: var(--text-muted);
   transition: all 0.2s ease;
+  min-width: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -79,7 +79,6 @@
 
 .theme-btn.active {
   background: var(--accent-bg);
-  color: var(--accent-light);
   box-shadow: 0 0 0 1px var(--accent);
   transform: none;
 }
@@ -682,32 +681,6 @@ button.secondary:hover:not(:disabled) {
   .messages-header {
     flex-direction: column;
     gap: 0.2rem;
-  }
-
-  .message-card {
-    padding: 0.55rem 0.7rem;
-  }
-
-  .message-header {
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-
-  .msg-id {
-    max-width: 100px;
-  }
-
-  .msg-meta-right {
-    margin-left: 0;
-    width: 100%;
-  }
-
-  .message-body {
-    font-size: 0.78rem;
-  }
-
-  .message-actions {
-    gap: 0.25rem;
   }
 
   .btn-complete,
