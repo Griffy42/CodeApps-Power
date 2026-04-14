@@ -1,14 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import { ServiceBusService } from './generated';
 import type { ServiceBusMessage } from './generated/models/ServiceBusModel';
 
 // The Service Bus queue name to interact with.
-// Change this to target a different queue.
 const QUEUE_NAME = 'petestest';
 
 // Number of messages to display per page in the message list
 const PAGE_SIZE = 10;
+
+// Available theme options
+const THEMES = [
+  { id: 'dark', label: 'Dark', icon: '🌑' },
+  { id: 'light', label: 'Light', icon: '☀️' },
+  { id: 'midnight', label: 'Midnight', icon: '🔮' },
+  { id: 'nord', label: 'Nord', icon: '❄️' },
+] as const;
+
+type ThemeId = (typeof THEMES)[number]['id'];
 
 /**
  * Service Bus Explorer — main app component.
@@ -17,6 +26,16 @@ const PAGE_SIZE = 10;
  * messages on an Azure Service Bus queue via the Power Apps connector.
  */
 function App() {
+  // ── Theme ──
+  const [theme, setTheme] = useState<ThemeId>(() => {
+    return (localStorage.getItem('sb-theme') as ThemeId) || 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('sb-theme', theme);
+  }, [theme]);
+
   // Currently displayed messages (from the last peek operation)
   const [messages, setMessages] = useState<ServiceBusMessage[]>([]);
   // Text input for composing a new message to send
@@ -211,6 +230,29 @@ function App() {
     setBusyMsgId(null);
   };
 
+  /** Seed 30 sample messages into the queue. */
+  const seedMessages = async () => {
+    const SEED_COUNT = 30;
+    setLoading(true);
+    setStatus('');
+    try {
+      for (let i = 1; i <= SEED_COUNT; i++) {
+        setLoadingText(`Seeding message ${i} of ${SEED_COUNT}…`);
+        const text = `Sample message #${i} — created ${new Date().toLocaleString()}`;
+        const bytes = new TextEncoder().encode(text);
+        const encoded = btoa(String.fromCharCode(...bytes));
+        await ServiceBusService.SendMessage(QUEUE_NAME, { ContentData: encoded, ContentType: 'text/plain' });
+      }
+      setStatus(`Seeded ${SEED_COUNT} sample messages`);
+      await peekMessages(activeQueueType);
+      return;
+    } catch (err: unknown) {
+      setStatus(`Seed error: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
+    }
+    setLoadingText('');
+    setLoading(false);
+  };
+
   /**
    * Send a new message to the queue.
    * The message body is base64-encoded (required by the Service Bus connector).
@@ -251,7 +293,22 @@ function App() {
       <header className="app-header">
         <div className="icon">🚌</div>
         <h1>Service Bus Explorer</h1>
+        <div className="theme-picker">
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              className={`theme-btn ${theme === t.id ? 'active' : ''}`}
+              onClick={() => setTheme(t.id)}
+              title={t.label}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <span className="queue-badge" title="Active Service Bus queue">{QUEUE_NAME}</span>
+        <button className="btn-seed" onClick={seedMessages} disabled={loading} title="Send 30 sample messages to the queue">
+          🌱 Seed 30
+        </button>
       </header>
 
       {/* Send panel — type a message and send to the queue */}
