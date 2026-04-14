@@ -19,6 +19,7 @@ A React + TypeScript + Vite app deployed as a [Power Apps Code App](https://lear
 - **Loading banner** with descriptive progress (connecting, releasing locks, fetching)
 - **Base64 decoder** utility panel
 - **Dark glass-panel UI** with colour-coded status bar
+- **Configurable queue name** — set via `VITE_QUEUE_NAME` env var, editable in the header at runtime, persisted to localStorage
 - **Theme picker** — Dark, Light, Midnight, and Nord themes with localStorage persistence
 - **Responsive design** — tablet (≤768px) and mobile (≤480px) breakpoints
 - **Full-width layout** — uses all available screen space
@@ -62,10 +63,11 @@ A React + TypeScript + Vite app deployed as a [Power Apps Code App](https://lear
    - Select **No** for connection reference
    - Paste the connection ID from the connection URL in make.powerapps.com
 
-6. **Configure the queue name** in `src/App.tsx`:
-   ```ts
-   const QUEUE_NAME = 'your-queue-name';
+6. **Configure the queue name** — create a `.env` file in the project root:
+   ```env
+   VITE_QUEUE_NAME=your-queue-name
    ```
+   The queue name can also be changed at runtime via the input field in the app header. The value is persisted to localStorage.
 
 7. **Build and deploy**
    ```bash
@@ -120,6 +122,13 @@ src/
 - SAS key authentication may be disabled by Azure Policy on some namespaces — use Entra ID auth in that case.
 
 ## Changelog
+
+### Configurable queue name (April 2026)
+
+- **Refactor:** Queue name is no longer hardcoded in `App.tsx`; defaults from `VITE_QUEUE_NAME` env var
+- **Feature:** Editable queue name input in the header — change queues without redeploying
+- **Persistence:** Selected queue name saved to localStorage across sessions
+- **Added:** `.env` file (gitignored) for local configuration
 
 ### Code review fixes (April 2026)
 
