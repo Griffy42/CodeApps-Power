@@ -6,7 +6,7 @@ A React + TypeScript + Vite app deployed as a [Power Apps Code App](https://lear
 
 - **Send messages** to a queue (auto base64-encoded)
 - **Peek all messages** with peek-lock from Main or Dead Letter queues (batched fetch, no cap)
-- **Table view** matching Azure Portal headers — Sequence Number, Message ID, State, Body Size, Content Type, Label/Subject, Correlation ID, and decoded Message Text
+- **Table view** matching Azure Portal headers — Sequence Number, Message ID, State, Body Size, Content Type, Label/Subject, Correlation ID, Session ID, and decoded Message Text
 - **Dead Letter columns** — Dead Letter Reason and DL Error shown when viewing DLQ
 - **Complete** messages (permanently removes from queue) with confirmation dialog
 - **Dead-letter** messages (moves to Dead Letter sub-queue) with confirmation dialog
@@ -20,6 +20,7 @@ A React + TypeScript + Vite app deployed as a [Power Apps Code App](https://lear
 - **Base64 decoder** utility panel
 - **Dark glass-panel UI** with colour-coded status bar
 - **Configurable queue name** — set via `VITE_QUEUE_NAME` env var, editable in the header at runtime, persisted to localStorage
+- **Session ID support** — optional session ID input in the header for session-enabled queues/topics; passed to peek, complete, abandon, dead-letter, and send operations; persisted to localStorage
 - **Theme picker** — Dark, Light, Midnight, and Nord themes with localStorage persistence
 - **Responsive design** — tablet (≤768px) and mobile (≤480px) breakpoints
 - **Full-width layout** — uses all available screen space

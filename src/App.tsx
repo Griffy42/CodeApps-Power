@@ -35,6 +35,15 @@ function App() {
     localStorage.setItem('sb-queue-name', queueName);
   }, [queueName]);
 
+  // ── Session ID (optional, for session-enabled queues) ──
+  const [sessionId, setSessionId] = useState(() => {
+    return localStorage.getItem('sb-session-id') || '';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sb-session-id', sessionId);
+  }, [sessionId]);
+
   // ── Theme ──
   const [theme, setTheme] = useState<ThemeId>(() => {
     return (localStorage.getItem('sb-theme') as ThemeId) || 'dark';
@@ -95,7 +104,7 @@ function App() {
     const results = await Promise.allSettled(
       lockedMsgs.map((msg) =>
         ServiceBusService.AbandonMessageInQueue(
-          queueName, msg.LockToken!, queueType
+          queueName, msg.LockToken!, queueType, sessionId || undefined
         )
       )
     );
@@ -126,7 +135,7 @@ function App() {
         await Promise.allSettled(
           lockedMsgs.map((msg) =>
             ServiceBusService.AbandonMessageInQueue(
-              queueName, msg.LockToken!, queueType
+              queueName, msg.LockToken!, queueType, sessionId || undefined
             )
           )
         );
@@ -146,7 +155,7 @@ function App() {
             : `Fetched ${allMsgs.length} message(s) so far — checking for more…`
         );
         const result = await ServiceBusService.GetMessagesFromQueueWithPeekLock(
-          queueName, BATCH_SIZE, queueType
+          queueName, BATCH_SIZE, queueType, sessionId || undefined
         );
         if (result.error) {
           setStatus(`Peek error: ${JSON.stringify(result.error)}`);
@@ -188,7 +197,7 @@ function App() {
     setBusyMsgId(msg.MessageId ?? null);
     try {
       await ServiceBusService.CompleteMessageInQueue(
-        queueName, msg.LockToken, activeQueueType
+        queueName, msg.LockToken, activeQueueType, sessionId || undefined
       );
       removeMessage(msg.MessageId);
       setStatus(`Completed message ${msg.MessageId}`);
@@ -212,7 +221,7 @@ function App() {
     setBusyMsgId(msg.MessageId ?? null);
     try {
       await ServiceBusService.DeadLetterMessageInQueue(
-        queueName, msg.LockToken, undefined, 'Manual dead-letter', 'Dead-lettered via Service Bus Explorer'
+        queueName, msg.LockToken, sessionId || undefined, 'Manual dead-letter', 'Dead-lettered via Service Bus Explorer'
       );
       removeMessage(msg.MessageId);
       setStatus(`Dead-lettered message ${msg.MessageId}`);
@@ -231,7 +240,7 @@ function App() {
     setBusyMsgId(msg.MessageId ?? null);
     try {
       await ServiceBusService.AbandonMessageInQueue(
-        queueName, msg.LockToken, activeQueueType
+        queueName, msg.LockToken, activeQueueType, sessionId || undefined
       );
       removeMessage(msg.MessageId);
       setStatus(`Abandoned message ${msg.MessageId} — returned to queue`);
@@ -252,7 +261,7 @@ function App() {
         const text = `Sample message #${i} — created ${new Date().toLocaleString()}`;
         const bytes = new TextEncoder().encode(text);
         const encoded = btoa(String.fromCharCode(...bytes));
-        await ServiceBusService.SendMessage(queueName, { ContentData: encoded, ContentType: 'text/plain' });
+        await ServiceBusService.SendMessage(queueName, { ContentData: encoded, ContentType: 'text/plain', SessionId: sessionId || undefined });
       }
       setStatus(`Seeded ${SEED_COUNT} sample messages`);
       await peekMessages(activeQueueType);
@@ -278,7 +287,7 @@ function App() {
       // TextEncoder + manual binary-to-base64 handles multi-byte chars correctly.
       const bytes = new TextEncoder().encode(sendText);
       const encoded = btoa(String.fromCharCode(...bytes));
-      const message = { ContentData: encoded, ContentType: 'text/plain' };
+      const message: ServiceBusMessage = { ContentData: encoded, ContentType: 'text/plain', SessionId: sessionId || undefined };
       const result = await ServiceBusService.SendMessage(queueName, message);
       setSendText('');
       if (result.error) {
@@ -322,6 +331,13 @@ function App() {
           onChange={(e) => setQueueName(e.target.value)}
           placeholder="queue name"
           title="Service Bus queue name"
+        />
+        <input
+          className="queue-input"
+          value={sessionId}
+          onChange={(e) => setSessionId(e.target.value)}
+          placeholder="session ID (optional)"
+          title="Session ID for session-enabled queues (leave empty for non-session queues)"
         />
         <button className="btn-seed" onClick={seedMessages} disabled={loading} title="Send 30 sample messages to the queue">
           🌱 Seed 30
@@ -421,6 +437,7 @@ function App() {
                   <th>Content Type</th>
                   <th>Label / Subject</th>
                   <th>Correlation ID</th>
+                  <th>Session ID</th>
                   {activeQueueType === 'DeadLetter' && <th>Dead Letter Reason</th>}
                   {activeQueueType === 'DeadLetter' && <th>DL Error</th>}
                   <th>Message Text</th>
@@ -452,6 +469,7 @@ function App() {
                     <td className="cell-ct">{msg.ContentType || '—'}</td>
                     <td className="cell-label">{msg.Label || '—'}</td>
                     <td className="cell-corr" title={msg.CorrelationId ?? ''}>{msg.CorrelationId || '—'}</td>
+                    <td className="cell-session" title={msg.SessionId ?? ''}>{msg.SessionId || '—'}</td>
                     {activeQueueType === 'DeadLetter' && <td className="cell-dlr" title={dlReason}>{dlReason || '—'}</td>}
                     {activeQueueType === 'DeadLetter' && <td className="cell-dle" title={dlError}>{dlError || '—'}</td>}
                     <td className="cell-body" title={decoded}>{decoded}</td>
